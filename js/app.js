@@ -541,16 +541,24 @@ async function loadWeather(lat, lon, name){
       `&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max` +
       `&timezone=auto&forecast_days=14`;
     const aqUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=us_aqi&timezone=auto`;
-    const [res, aqRes] = await Promise.all([fetchWithTimeout(url), fetchWithTimeout(aqUrl)]);
+    const aqRequest = fetchWithTimeout(aqUrl);
+    const res = await fetchWithTimeout(url);
     if(myToken !== loadToken) return; // a newer request superseded this one
     const data = await res.json();
-    let aqi = null;
-    try{ const aqData = await aqRes.json(); aqi = aqData.current ? aqData.current.us_aqi : null; }catch(e){}
-    if(myToken !== loadToken) return;
-    data._aqi = aqi;
+    data._aqi = null;
     data._lat = lat; data._lon = lon;
     currentData = data; currentName = name;
     render(data, name);
+
+    try{
+      const aqRes = await aqRequest;
+      const aqData = await aqRes.json();
+      if(myToken !== loadToken) return;
+      data._aqi = aqData.current ? aqData.current.us_aqi : null;
+      render(data, name);
+    }catch(e){
+      // Air quality is optional; the weather forecast is already usable.
+    }
   }catch(e){
     if(myToken !== loadToken) return;
     app.innerHTML = '<div class="status error">Couldn\'t load the forecast right now. Please try again in a moment.</div>';
@@ -583,8 +591,12 @@ function renderFavs(){
 
 function drawTempChart(canvas, times, temps){
   const ctx = canvas.getContext('2d');
-  const w = canvas.width = canvas.clientWidth * 2;
-  const h = canvas.height = 90 * 2;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = canvas.clientWidth;
+  const h = 90;
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0,0,w,h);
   const min = Math.min(...temps), max = Math.max(...temps);
   const pad = 16;
@@ -625,11 +637,15 @@ function drawTempChart(canvas, times, temps){
 
 function drawPrecipChart(canvas, percents){
   const ctx = canvas.getContext('2d');
-  const w = canvas.width = canvas.clientWidth * 2;
-  const h = canvas.height = 70 * 2;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = canvas.clientWidth;
+  const h = 70;
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0,0,w,h);
   const pad = 10;
-  const barGap = 6 * 2;
+  const barGap = 6;
   const barW = (w - pad*2 - barGap*(percents.length-1)) / percents.length;
   percents.forEach((p, i) => {
     const barH = Math.max(2, (p/100) * (h - pad*2));
